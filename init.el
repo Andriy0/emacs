@@ -1,6 +1,35 @@
+;; NOTE: init.el is now generated from Emacs.org.  Please edit that file
+;;       in Emacs and init.el will be generated automatically!
+
+;; You will most likely need to adjust this font size for your system!
+(defvar efs/default-font-size 160)
+(defvar efs/default-variable-font-size 160)
+
+;; Make frame transparency overridable
+(defvar efs/frame-transparency '(90 . 90))
+
 ;; Garbage collection
-(setq gc-cons-treshold 5000000) ; 5 MB
-(add-hook 'focus-out-hook 'garbage-collect)
+(setq gc-cons-threshold (* 50 1000 1000))
+;; (add-hook 'focus-out-hook 'garbage-collect)
+
+;; Use a hook so the message doesn't get clobbered by other messages.
+(add-hook 'emacs-startup-hook
+(lambda ()
+(message "Emacs ready in %s with %d garbage collections."
+(format "%.2f seconds"
+(float-time
+(time-subtract after-init-time before-init-time)))
+gcs-done)))
+
+;; Return gc-threshold to normal value
+(run-with-idle-timer
+5 nil
+(lambda ()
+(setq gc-cons-threshold (* 2 1000 1000))
+(message "gc-cons-threshold restored to %s"
+gc-cons-threshold)))
+
+(use-package esup)
 
 (eval-after-load 'ivy-rich
   (progn
@@ -29,16 +58,6 @@
     (advice-add 'ivy-rich--ivy-switch-buffer-transformer :around 'ek/ivy-rich-cache-lookup)
     (advice-add 'ivy-switch-buffer :after 'ek/ivy-rich-cache-rebuild-trigger)))
 
-;; NOTE: init.el is now generated from Emacs.org.  Please edit that file
-;;       in Emacs and init.el will be generated automatically!
-
-;; You will most likely need to adjust this font size for your system!
-(defvar efs/default-font-size 160)
-(defvar efs/default-variable-font-size 160)
-
-;; Make frame transparency overridable
-(defvar efs/frame-transparency '(90 . 90))
-
 ;; Initialize package sources
 (require 'package)
 
@@ -55,7 +74,9 @@
   (package-install 'use-package))
 
 (require 'use-package)
-(setq use-package-always-ensure t)
+(setq use-package-always-ensure nil)
+(setq use-package-verbose nil)
+(setq use-package-always-defer nil)
 
 (setq inhibit-startup-message t)
 
@@ -68,6 +89,9 @@
 
 ;; Set up the visible bell
 (setq visible-bell nil)
+
+;; Set up the ring bell
+(setq ring-bell-function 'ignore)
 
 (column-number-mode)
 (global-display-line-numbers-mode t)
@@ -86,8 +110,9 @@
 (dolist (mode '(org-mode-hook
                 term-mode-hook
                 shell-mode-hook
-                treemacs-mode-hook
-                eshell-mode-hook))
+                vterm-mode-hook
+                eshell-mode-hook
+                treemacs-mode-hook))
   (add-hook mode (lambda () (display-line-numbers-mode 0))))
 
 ;; Disable blink cursor
@@ -96,10 +121,14 @@
 ;; Accept 'y' and 'n' rather than 'yes' and 'no'.
 (defalias 'yes-or-no-p 'y-or-n-p)
 
-(set-face-attribute 'default nil :font "Mononoki Nerd Font" :height efs/default-font-size)
+;; Stop creating backup and autosave files.
+(setq make-backup-files nil
+      auto-save-default nil)
+
+(set-face-attribute 'default nil :font "mononoki" :height efs/default-font-size)
 
 ;; Set the fixed pitch face
-(set-face-attribute 'fixed-pitch nil :font "Mononoki Nerd Font" :height efs/default-font-size)
+(set-face-attribute 'fixed-pitch nil :font "mononoki" :height efs/default-font-size)
 
 ;; Set the variable pitch face
 (set-face-attribute 'variable-pitch nil :font "Cantarell" :height efs/default-font-size)
@@ -116,7 +145,13 @@
 
   (efs/leader-keys
     "t"  '(:ignore t :which-key "toggles")
-    "tt" '(counsel-load-theme :which-key "choose theme")))
+    "tt" '(counsel-load-theme :which-key "choose theme")
+    "c" '(:ignore t :which-key "configs")
+    "ca" '(lambda () (interactive) (find-file "~/Emacs.org"))
+    "cb" '(lambda () (interactive) (find-file "~/Desktop.org"))
+    "cc" '(lambda () (interactive) (find-file "/sudo:root@localhost:/etc/config.scm"))
+    "cd" '(lambda () (interactive) (find-file "/sudo:root@localhost:/etc/config.scm"))
+    "ce" '(lambda () (interactive) (find-file "~/.config/awesome/rc.lua"))))
 
 (use-package evil
   :init
@@ -127,9 +162,9 @@
   :config
   (evil-mode 1)
   (define-key evil-insert-state-map (kbd "C-g") 'evil-normal-state)
-  ;; (define-key evil-insert-state-map (kbd "C-h") 'evil-delete-backward-char-and-join)
+  (define-key evil-insert-state-map (kbd "C-h") 'evil-delete-backward-char-and-join)
 
-  (define-key evil-normal-state-map (kbd "C-r") 'undo-tree-redo)
+  ;; (define-key evil-normal-state-map (kbd "C-r") 'undo-tree-redo)
 
   ;; Use visual line motions even outside of visual-line-mode buffers
   ;; (evil-global-set-key 'motion "j" 'evil-next-visual-line)
@@ -143,13 +178,19 @@
   (evil-collection-init))
   
 (use-package undo-tree
+  :after evil
   :config
   (global-undo-tree-mode 1))
 
-(use-package command-log-mode)
+(use-package command-log-mode
+  :commands command-log-mode)
 
-(use-package doom-themes
-  :init (load-theme 'doom-palenight t))
+;; Color theme
+(load-theme 'modus-vivendi t)
+
+(use-package modus-themes)
+
+;; (use-package doom-themes)
 
 (use-package all-the-icons)
 
@@ -158,10 +199,18 @@
   :custom ((doom-modeline-height 15)))
 
 (use-package which-key
-  :init (which-key-mode)
+  :after evil
+  ;; :init (which-key-mode)
   :diminish which-key-mode
+  :custom
+  (which-key-idle-delay 2)
   :config
-  (setq which-key-idle-delay 2))
+  (which-key-mode))
+  
+;; (use-package which-key-posframe
+;;   :load-path "~/.config/emacs/elpa/which-key-posframe-20190427.1103/which-key-posframe.el"
+;;   :config
+;;   (which-key-posframe-mode))
 
 (use-package ivy
   :diminish
@@ -182,8 +231,10 @@
   (ivy-mode 1))
 
 (use-package ivy-rich
-  :init
-  (ivy-rich-mode 1))
+  ;; :init (ivy-rich-mode 1)
+  :after ivy
+  :config
+  (ivy-rich-mode))
 
 (use-package counsel
   :bind (("C-M-j" . 'counsel-switch-buffer)
@@ -194,7 +245,31 @@
   :config
   (counsel-mode 1))
 
-(use-package swiper)
+(use-package swiper
+  :commands swiper)
+
+(use-package ivy-prescient
+  :after counsel
+  :custom
+  (prescient-persist-mode t)
+  :config
+  (ivy-prescient-mode 1))
+
+(use-package ivy-posframe
+  :after ivy
+  :custom
+  (ivy-posframe-display-functions-alist
+      '((swiper          . ivy-posframe-display-at-point)
+        (complete-symbol . ivy-posframe-display-at-point)
+        (counsel-M-x     . ivy-posframe-display-at-window-bottom-left)
+        (t               . ivy-posframe-display)))
+  (ivy-posframe-parameters 
+      '((alpha . 80)                                   
+        ;; (parent-frame nil)
+        (left-fringe . 7)                                                   
+        (right-fringe . 7)))
+  :config 
+  (ivy-posframe-mode 1))
 
 (use-package diminish)
 
@@ -208,7 +283,8 @@
   ([remap describe-variable] . counsel-describe-variable)
   ([remap describe-key] . helpful-key))
 
-(use-package hydra)
+(use-package hydra
+  :defer t)
 
 (defhydra hydra-text-scale (:timeout 4)
   "scale text"
@@ -221,9 +297,9 @@
 
 (defun efs/org-font-setup ()
   ;; Replace list hyphen with dot
-  ;; (font-lock-add-keywords 'org-mode
-  ;;                         '(("^ *\\([-]\\) "
-  ;;                            (0 (prog1 () (compose-region (match-beginning 1) (match-end 1) "•"))))))
+  (font-lock-add-keywords 'org-mode
+                          '(("^ *\\([-]\\) "
+                             (0 (prog1 () (compose-region (match-beginning 1) (match-end 1) "•"))))))
 
   ;; Set faces for heading levels
   (dolist (face '((org-level-1 . 1.2)
@@ -253,7 +329,9 @@
   (visual-line-mode 1))
 
 (use-package org
-  :pin org
+  ;; :defer t
+  ;; :pin org
+  :commands (org-capture org-agenda)
   :hook (org-mode . efs/org-mode-setup)
   :config
   (setq org-ellipsis " ▾")
@@ -262,11 +340,11 @@
 
   (efs/org-font-setup))
 
-(use-package org-bullets
-  :after org
-  :hook (org-mode . org-bullets-mode)
-  :custom
-  (org-bullets-bullet-list '("◉" "○" "●" "○" "●" "○" "●")))
+;; (use-package org-bullets
+;;   :after org
+;;   :hook (org-mode . org-bullets-mode)
+;;   :custom
+;;   (org-bullets-bullet-list '("◉" "○" "●" "○" "●" "○" "●")))
 
 (defun efs/org-mode-visual-fill ()
   (setq visual-fill-column-width 100
@@ -276,19 +354,23 @@
 (use-package visual-fill-column
   :hook (org-mode . efs/org-mode-visual-fill))
 
-(org-babel-do-load-languages
-  'org-babel-load-languages
-  '((emacs-lisp . t)
-    (python . t)))
+(with-eval-after-load 'org
+  (org-babel-do-load-languages
+    'org-babel-load-languages
+    '((emacs-lisp . t)
+      (python . t)))
+  
+  (push '("conf-unix" . conf-unix) org-src-lang-modes))
 
-(push '("conf-unix" . conf-unix) org-src-lang-modes)
-
-;; This is needed as of Org 9.2
-(require 'org-tempo)
-
-(add-to-list 'org-structure-template-alist '("sh" . "src shell"))
-(add-to-list 'org-structure-template-alist '("el" . "src emacs-lisp"))
-(add-to-list 'org-structure-template-alist '("py" . "src python"))
+(with-eval-after-load 'org
+  ;; This is needed as of Org 9.2
+  (require 'org-tempo)
+    (add-to-list 'org-structure-template-alist '("sh" . "src shell"))
+    (add-to-list 'org-structure-template-alist '("el" . "src emacs-lisp"))
+    (add-to-list 'org-structure-template-alist '("py" . "src python"))
+    (add-to-list 'org-structure-template-alist '("xm" . "src xml"))
+    (add-to-list 'org-structure-template-alist '("co" . "src conf"))
+    (add-to-list 'org-structure-template-alist '("sc" . "src scheme")))
 
 ;; Automatically tangle our Emacs.org config file when we save it
 (defun efs/org-babel-tangle-config ()
@@ -320,15 +402,18 @@
 ;; (use-package lsp-treemacs
 ;;   :after lsp)
 
-(use-package lsp-ivy)
+(use-package lsp-ivy
+  :after lsp-mode)
 
 (use-package nix-mode
   :mode "//.nix//'"
   :hook (nix-mode . lsp-deferred))
 
-(use-package lua-mode
-  :mode "//.lua'"
-  :hook (lua-mode . lsp-deferred))
+;; (use-package lua-mode
+;;   :mode "//.lua'"
+;;   :hook (lua-mode . lsp-deferred))
+
+(setq geiser-scheme-implementation 'guile)
 
 (use-package company
   :after lsp-mode
@@ -350,8 +435,101 @@
 (use-package rainbow-delimiters
   :hook (prog-mode . rainbow-delimiters-mode))
 
-(desktop-save-mode 1)
+;; Parinfer
+(use-package parinfer
+  :bind
+  (("C-," . parinfer-toggle-mode))
+  :init
+  (progn
+    (setq parinfer-extensions
+          '(defaults       ; should be included.
+            pretty-parens  ; different paren styles for different modes.
+            evil           ; If you use Evil.
+            ;; lispy          ; If you use Lispy. With this extension, you should install Lispy and do not enable lispy-mode directly.
+            ;; paredit        ; Introduce some paredit commands.
+            smart-tab      ; C-b & C-f jump positions and smart shift with tab & S-tab.
+            smart-yank))   ; Yank behavior depend on mode.
+    (add-hook 'clojure-mode-hook #'parinfer-mode)
+    (add-hook 'emacs-lisp-mode-hook #'parinfer-mode)
+    (add-hook 'common-lisp-mode-hook #'parinfer-mode)
+    (add-hook 'scheme-mode-hook #'parinfer-mode)
+    (add-hook 'lisp-mode-hook #'parinfer-mode)))
 
-;; Stop creating backup and autosave files.
-(setq make-backup-files nil
-      auto-save-default nil)
+(use-package term
+  :commands term
+  :config
+  (setq explicit-shell-file-name "bash") ;; Change this to zsh, etc
+  ;;(setq explicit-zsh-args '())         ;; Use 'explicit-<shell>-args for shell-specific args
+
+  ;; Match the default Bash shell prompt.  Update this if you have a custom prompt
+  (setq term-prompt-regexp "^[^#$%>\n]*[#$%>] *"))
+
+(use-package eterm-256color
+  :hook (term-mode . eterm-256color-mode))
+
+(defun efs/configure-eshell ()
+  ;; Save command history when commands are entered
+  (add-hook 'eshell-pre-command-hook 'eshell-save-some-history)
+
+  ;; Truncate buffer for performance
+  (add-to-list 'eshell-output-filter-functions 'eshell-truncate-buffer)
+
+  ;; Bind some useful keys for evil-mode
+  (evil-define-key '(normal insert visual) eshell-mode-map (kbd "C-r") 'counsel-esh-history)
+  (evil-define-key '(normal insert visual) eshell-mode-map (kbd "<home>") 'eshell-bol)
+  (evil-normalize-keymaps)
+
+  (setq eshell-history-size         10000
+        eshell-buffer-maximum-lines 10000
+        eshell-hist-ignoredups t
+        eshell-scroll-to-bottom-on-input t))
+
+(use-package eshell-git-prompt
+  :after eshell)
+
+(use-package eshell
+  :commands eshell
+  :hook (eshell-first-time-mode . efs/configure-eshell)
+  :config
+
+  (with-eval-after-load 'esh-opt
+    (setq eshell-destroy-buffer-when-process-dies t)
+    (setq eshell-visual-commands '("htop" "zsh" "vim")))
+
+  (eshell-git-prompt-use-theme 'robbyrussell))
+
+(use-package vterm
+  :commands vterm)
+
+(use-package dired
+  :defer t
+  :hook (dired-mode . dired-hide-details-mode)
+  :commands (dired dired-jump)
+  :bind (("C-x C-j" . dired-jump))
+  :custom
+  (dired-async-mode t)
+  (dired-dwim-target t)
+  (dired-listing-switches "-agho --group-directories-first")
+  (wdired-allow-to-change-permissions t)
+  (wdired-create-parent-directories t)
+  (diredfl-global-mode t)
+  :config
+  (evil-collection-define-key 'normal 'dired-mode-map
+    "h" 'dired-up-directory
+    "l" 'dired-find-file))
+
+(use-package diredfl
+  :commands (dired dired-jump))
+  
+(use-package all-the-icons-dired
+  :hook (dired-mode . all-the-icons-dired-mode))
+
+(use-package dired-open
+  :custom
+  (dired-open-extensions '(("png" . "feh")
+                           ("mkv" . "mpv")
+                           ("docx" . "libreoffice")
+                           ("pdf" . "evince"))))
+
+(use-package bluetooth
+  :commands bluetooth-list-devices)
